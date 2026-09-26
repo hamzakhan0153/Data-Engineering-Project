@@ -111,9 +111,41 @@ def root():
 # Get feature information
 # --------------------------------------------------
 
+def _deduplicate_feature_dict(feature_dict):
+    if not isinstance(feature_dict, dict):
+        return feature_dict
+
+    for section_name in ["CATEGORICAL", "NUMERICAL"]:
+        if section_name not in feature_dict:
+            continue
+
+        section = feature_dict[section_name]
+        if not isinstance(section, dict):
+            continue
+
+        column_names = section.get("Column Name")
+        if isinstance(column_names, dict):
+            unique_columns = list(dict.fromkeys(column_names.values()))
+            section["Column Name"] = {str(idx): col for idx, col in enumerate(unique_columns)}
+            if "Members" in section and isinstance(section["Members"], dict):
+                unique_members = {}
+                for idx, col in enumerate(unique_columns):
+                    if col in section["Members"]:
+                        unique_members[str(idx)] = section["Members"][col]
+                    elif str(idx) in section["Members"]:
+                        unique_members[str(idx)] = section["Members"][str(idx)]
+                section["Members"] = unique_members
+
+    return feature_dict
+
+
+# overwrite the feature dictionary on startup to avoid duplicate columns caused by a broken serialized pipeline
+my_feature_dict = _deduplicate_feature_dict(my_feature_dict)
+
+
 @app.get("/features")
 def get_features():
-    return my_feature_dict
+    return _deduplicate_feature_dict(my_feature_dict)
 
 
 def _get_expected_columns():
@@ -131,21 +163,35 @@ def _get_expected_columns():
     return list(categorical_columns) + list(numerical_columns)
 
 
+def normalize_senior_citizen_input(value):
+    if value is None or pd.isna(value):
+        return value
+
+    if isinstance(value, bool):
+        return 1 if value else 0
+
+    if isinstance(value, (int, float)):
+        if value in (0, 1):
+            return int(value)
+        return value
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"yes", "true", "1"}:
+            return 1
+        if normalized in {"no", "false", "0"}:
+            return 0
+        return value
+
+    return value
+
+
 def normalize_input(raw_data: dict) -> pd.DataFrame:
     cleaned = dict(raw_data)
 
     if "SENIORCITIZEN" in cleaned:
-        cleaned["SENIORCITIZEN"] = cleaned["SENIORCITIZEN"].replace(
-            {
-                "Yes": 1,
-                "No": 0,
-                "yes": 1,
-                "no": 0,
-                "1": 1,
-                "0": 0,
-                True: 1,
-                False: 0,
-            }
+        cleaned["SENIORCITIZEN"] = normalize_senior_citizen_input(
+            cleaned["SENIORCITIZEN"]
         )
 
     df = pd.DataFrame([cleaned])

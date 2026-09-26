@@ -54,8 +54,15 @@ if isinstance(columns, dict):
 else:
     column_names = list(columns)
 
+# Remove duplicates produced by a broken serialized pipeline.
+seen_columns = set()
+unique_column_names = []
+for col in column_names:
+    if col not in seen_columns:
+        seen_columns.add(col)
+        unique_column_names.append(col)
 
-for i, col in enumerate(column_names):
+for i, col in enumerate(unique_column_names):
 
     # Members is a dictionary
     if isinstance(members, dict):
