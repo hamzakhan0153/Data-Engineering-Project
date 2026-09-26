@@ -64,22 +64,25 @@ for col in column_names:
 
 for i, col in enumerate(unique_column_names):
 
-    # Members is a dictionary
     if isinstance(members, dict):
 
-        # Try actual column name first
+        options = None
+
         if col in members:
             options = members[col]
-
-        # Otherwise use string index
         elif str(i) in members:
             options = members[str(i)]
-
-        # Otherwise use integer index
         elif i in members:
             options = members[i]
 
-        else:
+        if options is None:
+            # Some metadata stores values by original index, not the deduplicated index.
+            for key, value in members.items():
+                if key in (col, str(col), i, str(i)):
+                    options = value
+                    break
+
+        if options is None:
             st.error(f"No members found for column: {col}")
             st.stop()
 

@@ -124,16 +124,30 @@ def _deduplicate_feature_dict(feature_dict):
             continue
 
         column_names = section.get("Column Name")
+        members = section.get("Members")
+
         if isinstance(column_names, dict):
-            unique_columns = list(dict.fromkeys(column_names.values()))
-            section["Column Name"] = {str(idx): col for idx, col in enumerate(unique_columns)}
-            if "Members" in section and isinstance(section["Members"], dict):
+            ordered_pairs = []
+            seen = set()
+
+            for original_index in sorted(column_names.keys(), key=lambda x: int(str(x))):
+                col_name = column_names[original_index]
+                if col_name not in seen:
+                    seen.add(col_name)
+                    ordered_pairs.append((original_index, col_name))
+
+            section["Column Name"] = {
+                str(idx): col_name for idx, (_, col_name) in enumerate(ordered_pairs)
+            }
+
+            if isinstance(members, dict):
                 unique_members = {}
-                for idx, col in enumerate(unique_columns):
-                    if col in section["Members"]:
-                        unique_members[str(idx)] = section["Members"][col]
-                    elif str(idx) in section["Members"]:
-                        unique_members[str(idx)] = section["Members"][str(idx)]
+                for new_idx, (old_idx, col_name) in enumerate(ordered_pairs):
+                    candidate_keys = [old_idx, str(old_idx), col_name, str(col_name)]
+                    for key in candidate_keys:
+                        if key in members:
+                            unique_members[str(new_idx)] = members[key]
+                            break
                 section["Members"] = unique_members
 
     return feature_dict
